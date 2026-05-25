@@ -12,6 +12,10 @@ jobs:
     runs-on: macos-latest
     permissions:
       contents: write
+    env:
+      # Evaluated at job level where secrets context is allowed;
+      # used in step-level `if` conditions below.
+      ENABLE_SIGNING: ${{ secrets.APPLE_CERTIFICATE != '' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -34,8 +38,7 @@ jobs:
         run: npm ci
 
       - name: Import Apple certificate for signing
-        # Only runs when the signing secrets are present in the repo
-        if: ${{ secrets.APPLE_CERTIFICATE != '' }}
+        if: env.ENABLE_SIGNING == 'true'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
