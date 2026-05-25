@@ -6,7 +6,13 @@ A macOS desktop app for organizing and running shell and Python scripts from a c
 
 Grab the latest `.dmg` from the [Releases](../../releases) page, open it, and drag **Script Toolbox** to your Applications folder.
 
-> **First launch:** macOS may block an unsigned app. Right-click the app icon and choose **Open**, then confirm in the dialog. You only need to do this once.
+> **"Script Toolbox is damaged" error?**
+> This is macOS Gatekeeper blocking an unsigned app downloaded from the internet.
+> Run this command after mounting the DMG, then drag to Applications as normal:
+> ```bash
+> xattr -cr "/Volumes/Script Toolbox/Script Toolbox.app"
+> ```
+> You only need to do this once. If you have set up code signing (see [Code Signing](#code-signing)), this step is not needed.
 
 ---
 
@@ -118,6 +124,23 @@ make test       # run all tests
 ```
 
 The DMG is written to `src-tauri/target/release/bundle/dmg/`.
+
+---
+
+## Code Signing
+
+Without signing, macOS blocks the app with a "damaged" error. To produce a signed and notarized DMG that installs without any warnings, add these secrets to your GitHub repo (**Settings → Secrets and variables → Actions**):
+
+| Secret | How to get it |
+|---|---|
+| `APPLE_CERTIFICATE` | Export a **Developer ID Application** cert from Keychain as `.p12`, then: `base64 -i cert.p12 \| pbcopy` |
+| `APPLE_CERTIFICATE_PASSWORD` | The password you set when exporting the `.p12` |
+| `APPLE_SIGNING_IDENTITY` | The full cert name, e.g. `Developer ID Application: Your Name (XXXXXXXXXX)` |
+| `APPLE_ID` | Your Apple ID email (for notarization) |
+| `APPLE_PASSWORD` | An app-specific password from [appleid.apple.com](https://appleid.apple.com) |
+| `APPLE_TEAM_ID` | Your 10-character Team ID from [developer.apple.com](https://developer.apple.com/account) |
+
+Once all six secrets are set, the next release tag will produce a fully signed and notarized DMG. Requires an [Apple Developer Program](https://developer.apple.com/programs/) membership ($99/year).
 
 ---
 
