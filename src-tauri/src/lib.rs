@@ -85,19 +85,31 @@ fn run_script(
     script_type: String,
     params: HashMap<String, String>,
 ) -> Result<(), String> {
-    let program = match script_type.as_str() {
-        "shell" => "bash",
-        "python" => "python3",
+    // Run through a bash login shell so the user's full PATH is available
+    // (Tauri apps launch without shell config, so tools like python3 from
+    // Homebrew or pyenv aren't visible otherwise).
+    let mut base_cmd = match script_type.as_str() {
+        "shell" => {
+            let mut c = Command::new("bash");
+            c.args(["-l", "--", &script_path]);
+            c
+        }
+        "python" => {
+            let escaped = script_path.replace('\'', "'\\''");
+            let bash_cmd = format!("python3 -- '{}'", escaped);
+            let mut c = Command::new("bash");
+            c.args(["-l", "-c", bash_cmd.as_str()]);
+            c
+        }
         _ => return Err(format!("unknown script type: {}", script_type)),
     };
 
-    let mut child = Command::new(program)
-        .arg(&script_path)
+    let mut child = base_cmd
         .envs(&params)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("failed to start '{}': {}", program, e))?;
+        .map_err(|e| format!("failed to start script: {}", e))?;
 
     let stdout = child.stdout.take().expect("stdout pipe");
     let stderr = child.stderr.take().expect("stderr pipe");
