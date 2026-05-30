@@ -1,8 +1,70 @@
 import { useState, useEffect, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
-import type { Script, OutputLine, ScriptMeta } from '../types'
+import type { Script, OutputLine, ScriptMeta, RunHistory } from '../types'
+import { useStore } from '../store/useStore'
 import CodeEditor from './CodeEditor'
+
+function relativeTime(ts: number): string {
+  const mins = Math.floor((Date.now() - ts) / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return days === 1 ? 'yesterday' : `${days}d ago`
+}
+
+function HistoryPanel({
+  history,
+  onRestore,
+}: {
+  history: RunHistory[]
+  onRestore: (params: Record<string, string>) => void
+}) {
+  if (history.length === 0) return null
+
+  return (
+    <div style={{ padding: '10px 20px 14px', borderBottom: '1px solid var(--border)', background: 'var(--bg-app)' }}>
+      <div style={{ fontSize: 11, color: 'var(--text-faint)', marginBottom: 8, letterSpacing: '0.06em' }}>
+        RECENT RUNS
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {history.map((entry, i) => {
+          const label = Object.entries(entry.params)
+            .filter(([, v]) => v !== '')
+            .map(([k, v]) => `${k}=${v}`)
+            .join('  ') || '(no params)'
+          return (
+            <div
+              key={i}
+              onClick={() => onRestore(entry.params)}
+              title="Click to restore these parameters"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '5px 10px', borderRadius: 3, cursor: 'pointer',
+                background: '#2d2d30',
+              }}
+              onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.background = '#3c3c3c')}
+              onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.background = '#2d2d30')}
+            >
+              <span style={{
+                fontFamily: "'SF Mono', monospace", fontSize: 11,
+                color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                flex: 1,
+              }}>
+                {label}
+              </span>
+              <span style={{ fontSize: 10, color: 'var(--text-faint)', flexShrink: 0, marginLeft: 16 }}>
+                {relativeTime(entry.timestamp)}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 function TypeBadge({ type }: { type: Script['type'] }) {
   return (
@@ -94,6 +156,8 @@ export default function ScriptRunner({ script }: { script: Script }) {
   const [meta, setMeta] = useState<ScriptMeta | null>(null)
   const [paramValues, setParamValues] = useState<Record<string, string>>({})
   const outputRef = useRef<HTMLDivElement>(null)
+  const { addRunHistory } = useStore()
+  const scriptHistory = useStore((s) => s.history[script.id] ?? [])
 
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState('')
@@ -163,6 +227,8 @@ export default function ScriptRunner({ script }: { script: Script }) {
         }
       }
     }
+
+    addRunHistory(script.id, paramValues)
 
     // Build the display command line (env vars + program + path)
     const envStr = Object.entries(paramValues)
@@ -318,6 +384,12 @@ export default function ScriptRunner({ script }: { script: Script }) {
         </div>
       ) : (
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+
+          {/* run history */}
+          <HistoryPanel
+            history={scriptHistory}
+            onRestore={(params) => setParamValues((prev) => ({ ...prev, ...params }))}
+          />
 
           {/* parameters */}
           {meta && meta.params.length > 0 && (

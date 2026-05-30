@@ -8,6 +8,7 @@ const reset = () => {
     selectedScriptId: null,
     selectedFolderId: null,
     searchQuery: '',
+    history: {},
   })
 }
 

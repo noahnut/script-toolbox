@@ -29,3 +29,8 @@ export interface ScriptMeta {
   description: string
   params: ParamDef[]
 }
+
+export interface RunHistory {
+  params: Record<string, string>
+  timestamp: number
+}

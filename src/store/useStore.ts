@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { AppFolder, Script } from '../types'
+import type { AppFolder, Script, RunHistory } from '../types'
 
 function uid(): string {
   return crypto.randomUUID()
@@ -12,6 +12,7 @@ interface State {
   selectedScriptId: string | null
   selectedFolderId: string | null
   searchQuery: string
+  history: Record<string, RunHistory[]>  // scriptId → last 5 distinct runs
 }
 
 interface Actions {
@@ -23,6 +24,7 @@ interface Actions {
   removeScript: (id: string) => void
   moveScript: (scriptId: string, folderId: string | null) => void
   moveFolder: (folderId: string, newParentId: string | null) => void
+  addRunHistory: (scriptId: string, params: Record<string, string>) => void
   setSelectedScript: (id: string | null) => void
   setSelectedFolder: (id: string | null) => void
   setSearchQuery: (q: string) => void
@@ -36,6 +38,7 @@ export const useStore = create<State & Actions>()(
       selectedScriptId: null,
       selectedFolderId: null,
       searchQuery: '',
+      history: {},
 
       addFolder: (name, parentId = null) =>
         set((s) => ({ folders: [...s.folders, { id: uid(), name, parentId }] })),
@@ -71,10 +74,14 @@ export const useStore = create<State & Actions>()(
         set((s) => ({ scripts: [...s.scripts, ...scripts.map((sc) => ({ ...sc, id: uid() }))] })),
 
       removeScript: (id) =>
-        set((s) => ({
-          scripts: s.scripts.filter((sc) => sc.id !== id),
-          selectedScriptId: s.selectedScriptId === id ? null : s.selectedScriptId,
-        })),
+        set((s) => {
+          const { [id]: _, ...remainingHistory } = s.history
+          return {
+            scripts: s.scripts.filter((sc) => sc.id !== id),
+            selectedScriptId: s.selectedScriptId === id ? null : s.selectedScriptId,
+            history: remainingHistory,
+          }
+        }),
 
       moveScript: (scriptId, folderId) =>
         set((s) => ({
@@ -94,6 +101,16 @@ export const useStore = create<State & Actions>()(
           return {
             folders: s.folders.map((f) => f.id === folderId ? { ...f, parentId: newParentId } : f),
           }
+        }),
+
+      addRunHistory: (scriptId, params) =>
+        set((s) => {
+          const paramsKey = JSON.stringify(params)
+          const prev = (s.history[scriptId] ?? []).filter(
+            (h) => JSON.stringify(h.params) !== paramsKey
+          )
+          const updated = [{ params, timestamp: Date.now() }, ...prev].slice(0, 5)
+          return { history: { ...s.history, [scriptId]: updated } }
         }),
 
       setSelectedScript: (id) => set({ selectedScriptId: id }),
